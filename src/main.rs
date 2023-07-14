@@ -1,11 +1,21 @@
-// use promptly::prompt;
-// use requestty::{prompt_one, Question};
+mod watcher;
+
+use clap::Parser;
 use rpassword::prompt_password;
 use ssh2::{KeyboardInteractivePrompt, Session};
 
 use std::io::prelude::*;
 use std::net::TcpStream;
-use std::path::Path;
+use std::path::{Path, PathBuf};
+
+#[derive(Parser, Debug)]
+struct App {
+    src: PathBuf,
+    dest: PathBuf,
+    server: String,
+    username: String,
+    port: Option<i32>,
+}
 
 struct Prompt;
 
@@ -27,25 +37,31 @@ impl KeyboardInteractivePrompt for Prompt {
 }
 
 fn main() {
-    let tcp = TcpStream::connect("goblin.ecru.cert.org:22");
-    match tcp {
-        Ok(con) => {
-            println!("connected to goblin");
-            let mut sess = Session::new().unwrap();
-            sess.set_tcp_stream(con);
-            println!("{:?}", sess.handshake().unwrap());
-            println!("{:?}", sess.auth_methods("tschollenberger_mgr"));
-            let mut p = Prompt {};
-            println!(
-                "{:?}",
-                sess.userauth_keyboard_interactive("tschollenberger_mgr", &mut p)
-            );
-            println!("here");
-        }
-        Err(e) => {
-            panic!("failed to connect to goblin {}", e);
-        }
-    }
+    let args = App::parse();
+    watcher::watch(args.src);
+    // let tcp = TcpStream::connect(format!(
+    //     "{}:{}",
+    //     args.server,
+    //     args.port.map_or_else(|| 22, |p| p)
+    // ));
+    //
+    // let username = &args.username;
+    // match tcp {
+    //     Ok(con) => {
+    //         println!("connected to goblin");
+    //         let mut sess = Session::new().unwrap();
+    //         sess.set_tcp_stream(con);
+    //         sess.handshake().unwrap();
+    //
+    //         sess.auth_methods(username).unwrap();
+    //         let mut p = Prompt {};
+    //         sess.userauth_keyboard_interactive(username, &mut p)
+    //             .unwrap();
+    //     }
+    //     Err(e) => {
+    //         panic!("failed to connect to {} {}", args.server, e);
+    //     }
+    // }
     // let mut sess = Session::new().unwrap();
     // sess.set_tcp_stream(tcp);
     // sess.userauth_agent("tschollenberger_mgr").unwrap();
