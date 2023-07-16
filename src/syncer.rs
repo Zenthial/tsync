@@ -1,4 +1,6 @@
+use crate::channel::close_channel;
 use crate::watcher::{SyncEvent, SyncFileType};
+
 use ssh2::{Channel, Session};
 
 use std::{
@@ -59,11 +61,7 @@ pub fn sync_missing_paths(
         if path.is_dir() {
             let mut chan = sess.channel_session().unwrap();
             create_folder(&mut chan, transform_path(path, src, dest));
-            chan.send_eof().unwrap();
-            chan.wait_eof().unwrap();
-            chan.close().unwrap();
-            chan.wait_close().unwrap();
-            chan.wait_close().unwrap();
+            close_channel(&mut chan);
         } else if path.is_file() {
             let contents = fs::read_to_string(&path).unwrap();
             create_file(sess, contents, transform_path(path, src, dest));
@@ -115,8 +113,5 @@ pub fn handle_event(sess: &mut Session, event: SyncEvent, src: PathBuf, dest: Pa
         }
     }
 
-    channel.send_eof().unwrap();
-    channel.wait_eof().unwrap();
-    channel.close().unwrap();
-    channel.wait_close().unwrap();
+    close_channel(&mut channel);
 }

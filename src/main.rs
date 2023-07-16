@@ -1,4 +1,5 @@
 mod auth;
+mod channel;
 mod checker;
 mod syncer;
 mod watcher;
