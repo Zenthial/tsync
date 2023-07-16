@@ -75,15 +75,19 @@ pub fn watch(path: PathBuf, ssh_sender: Sender<SyncEvent>) {
 
     let (sender, receiver) = mpsc::channel();
 
-    let mut watcher = PollWatcher::new(sender, config).unwrap();
-    watcher.watch(&path, RecursiveMode::Recursive).unwrap();
+    let mut watcher = PollWatcher::new(sender, config).expect("failed to create poll watcher");
+    watcher
+        .watch(&path, RecursiveMode::Recursive)
+        .expect("poll watcher failed to watch path");
 
     // never returns
     for result in receiver {
         match result {
             Ok(event) => {
                 if let Some(e) = handle_event(event) {
-                    ssh_sender.send(e).unwrap()
+                    ssh_sender
+                        .send(e)
+                        .expect("failed to send message to mpsc channel");
                 }
             }
             Err(_e) => {} //println!("watch error {:?}", e),

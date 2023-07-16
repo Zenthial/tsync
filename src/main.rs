@@ -34,9 +34,10 @@ fn main() {
     let mut sess = match tcp {
         Ok(con) => {
             println!("connected to {}", args.server);
-            let mut sess = Session::new().unwrap();
+            let mut sess = Session::new().expect("failed to establish ssh session");
             sess.set_tcp_stream(con);
-            sess.handshake().unwrap();
+            sess.handshake()
+                .expect("failed to establish session handshake");
 
             if let Err(e) = auth::authenticate(&mut sess, username) {
                 panic!("failed to auth {}", e);
