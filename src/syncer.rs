@@ -3,6 +3,7 @@ use crate::watcher::{SyncEvent, SyncFileType};
 
 use ssh2::{Channel, Session};
 
+use std::io::Read;
 use std::{
     fs,
     io::Write,
@@ -28,8 +29,11 @@ fn create_folder(chan: &mut Channel, path: PathBuf) {
 }
 
 fn remove_file(chan: &mut Channel, path: PathBuf) {
-    chan.exec(&format!("rm -f {}", path.to_str().unwrap()))
+    chan.exec(&format!("rm -f {}; echo $?", path.to_str().unwrap()))
         .unwrap();
+
+    let mut output = String::new();
+    chan.read_to_string(&mut output).unwrap();
 }
 
 fn remove_folder(chan: &mut Channel, path: PathBuf) {
@@ -69,6 +73,20 @@ pub fn sync_missing_paths(
     }
 }
 
+pub fn sync_old_paths(sess: &mut Session, old_paths: Vec<PathBuf>, src: &Path, dest: &Path) {
+    for path in old_paths {
+        let mut chan = sess.channel_session().unwrap();
+
+        let path_clone = path.clone();
+        let path_str = path_clone.to_str().unwrap();
+        let contents = fs::read_to_string(&path).unwrap();
+        modify(sess, &mut chan, contents, transform_path(path, &src, &dest));
+        println!("updated contents: {path_str}");
+
+        close_channel(&mut chan);
+    }
+}
+
 pub fn handle_event(sess: &mut Session, event: SyncEvent, src: PathBuf, dest: PathBuf) {
     let mut channel = sess.channel_session().unwrap();
     match event {
@@ -93,11 +111,8 @@ pub fn handle_event(sess: &mut Session, event: SyncEvent, src: PathBuf, dest: Pa
             SyncFileType::File => remove_file(&mut channel, transform_path(path, &src, &dest)),
             SyncFileType::Folder => remove_folder(&mut channel, transform_path(path, &src, &dest)),
             SyncFileType::Any => {
-                if path.is_file() {
-                    remove_file(&mut channel, transform_path(path, &src, &dest))
-                } else if path.is_dir() {
-                    remove_folder(&mut channel, transform_path(path, &src, &dest))
-                }
+                // will remove both files and folders
+                remove_folder(&mut channel, transform_path(path, &src, &dest))
             }
         },
         SyncEvent::DataChange(path) | SyncEvent::Modify(path) => {

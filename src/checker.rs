@@ -33,7 +33,7 @@ fn check_matches(sess: &mut Session, src: &Path, dest: &Path) -> bool {
     src_contents == dest_contents
 }
 
-fn walk_dir(sess: &mut Session, dir: &Path, dest: &Path) -> Vec<PathBuf> {
+fn walk_dir(sess: &mut Session, dir: &Path, dest: &Path) -> (Vec<PathBuf>, Vec<PathBuf>) {
     let mut missing = Vec::new();
     let mut mismatch = Vec::new();
     for entry in WalkDir::new(dir)
@@ -54,11 +54,10 @@ fn walk_dir(sess: &mut Session, dir: &Path, dest: &Path) -> Vec<PathBuf> {
         close_channel(&mut chan);
     }
 
-    println!("{:?}", mismatch);
-    missing
+    (missing, mismatch)
 }
 
-pub fn check(sess: &mut Session, src: &Path, dest: &Path) -> Vec<PathBuf> {
+pub fn check(sess: &mut Session, src: &Path, dest: &Path) -> (Vec<PathBuf>, Vec<PathBuf>) {
     if src.is_dir() {
         walk_dir(sess, src, dest)
     } else if src.is_file() {

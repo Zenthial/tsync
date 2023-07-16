@@ -54,8 +54,9 @@ fn main() {
     let (sender, receiver) = mpsc::channel();
     let src = args.src.clone();
     thread::spawn(move || {
-        let missing_paths = checker::check(&mut sess, &src, &args.dest);
+        let (missing_paths, old_paths) = checker::check(&mut sess, &src, &args.dest);
         syncer::sync_missing_paths(&mut sess, missing_paths, &src, &args.dest);
+        syncer::sync_old_paths(&mut sess, old_paths, &src, &args.dest);
 
         for receive in receiver {
             syncer::handle_event(&mut sess, receive, src.clone(), args.dest.clone());
