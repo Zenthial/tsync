@@ -1,7 +1,11 @@
 use crate::watcher::{SyncEvent, SyncFileType};
 use ssh2::{Channel, Session};
 
-use std::{fs, io::Write, path::PathBuf};
+use std::{
+    fs,
+    io::Write,
+    path::{Path, PathBuf},
+};
 
 fn create_file(sess: &mut Session, contents: String, path: PathBuf) {
     let bytes = contents.as_bytes();
@@ -37,7 +41,7 @@ fn modify(sess: &mut Session, chan: &mut Channel, contents: String, path: PathBu
     create_file(sess, contents, path);
 }
 
-pub fn transform_path(path: PathBuf, src: PathBuf, dest: PathBuf) -> PathBuf {
+pub fn transform_path(path: PathBuf, src: &Path, dest: &Path) -> PathBuf {
     let path_str = path.to_str().unwrap().to_string();
     let dest_str = dest.to_str().unwrap();
     let src_str = src.to_str().unwrap();
@@ -45,47 +49,74 @@ pub fn transform_path(path: PathBuf, src: PathBuf, dest: PathBuf) -> PathBuf {
     PathBuf::from(replaced_path)
 }
 
-pub fn handle_event(
+pub fn sync_missing_paths(
     sess: &mut Session,
-    channel: &mut Channel,
-    event: SyncEvent,
-    src: PathBuf,
-    dest: PathBuf,
+    missing_paths: Vec<PathBuf>,
+    src: &Path,
+    dest: &Path,
 ) {
+    for path in missing_paths {
+        if path.is_dir() {
+            let mut chan = sess.channel_session().unwrap();
+            create_folder(&mut chan, transform_path(path, src, dest));
+            chan.send_eof().unwrap();
+            chan.wait_eof().unwrap();
+            chan.close().unwrap();
+            chan.wait_close().unwrap();
+            chan.wait_close().unwrap();
+        } else if path.is_file() {
+            let contents = fs::read_to_string(&path).unwrap();
+            create_file(sess, contents, transform_path(path, src, dest));
+        }
+    }
+}
+
+pub fn handle_event(sess: &mut Session, event: SyncEvent, src: PathBuf, dest: PathBuf) {
+    let mut channel = sess.channel_session().unwrap();
     match event {
         // this code is almost identical to the next match statement
-        // could probably learn to write a macro that abstracts this better
+        // could probably learn to write macros, and abstract this better
         SyncEvent::Create(path, file_type) => match file_type {
             SyncFileType::File => {
                 let contents = fs::read_to_string(&path).unwrap();
-                create_file(sess, contents, transform_path(path, src, dest))
+                create_file(sess, contents, transform_path(path, &src, &dest))
             }
-            SyncFileType::Folder => create_folder(channel, transform_path(path, src, dest)),
+            SyncFileType::Folder => create_folder(&mut channel, transform_path(path, &src, &dest)),
             SyncFileType::Any => {
                 if path.is_file() {
                     let contents = fs::read_to_string(&path).unwrap();
-                    create_file(sess, contents, transform_path(path, src, dest))
+                    create_file(sess, contents, transform_path(path, &src, &dest))
                 } else if path.is_dir() {
-                    create_folder(channel, transform_path(path, src, dest))
+                    create_folder(&mut channel, transform_path(path, &src, &dest))
                 }
             }
         },
         SyncEvent::Remove(path, file_type) => match file_type {
-            SyncFileType::File => remove_file(channel, transform_path(path, src, dest)),
-            SyncFileType::Folder => remove_folder(channel, transform_path(path, src, dest)),
+            SyncFileType::File => remove_file(&mut channel, transform_path(path, &src, &dest)),
+            SyncFileType::Folder => remove_folder(&mut channel, transform_path(path, &src, &dest)),
             SyncFileType::Any => {
                 if path.is_file() {
-                    remove_file(channel, transform_path(path, src, dest))
+                    remove_file(&mut channel, transform_path(path, &src, &dest))
                 } else if path.is_dir() {
-                    remove_folder(channel, transform_path(path, src, dest))
+                    remove_folder(&mut channel, transform_path(path, &src, &dest))
                 }
             }
         },
         SyncEvent::DataChange(path) | SyncEvent::Modify(path) => {
             if path.is_file() {
                 let contents = fs::read_to_string(&path).unwrap();
-                modify(sess, channel, contents, transform_path(path, src, dest))
+                modify(
+                    sess,
+                    &mut channel,
+                    contents,
+                    transform_path(path, &src, &dest),
+                )
             }
         }
     }
+
+    channel.send_eof().unwrap();
+    channel.wait_eof().unwrap();
+    channel.close().unwrap();
+    channel.wait_close().unwrap();
 }

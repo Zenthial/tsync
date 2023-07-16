@@ -53,15 +53,11 @@ fn main() {
     let (sender, receiver) = mpsc::channel();
     let src = args.src.clone();
     thread::spawn(move || {
-        let mut channel = sess.channel_session().unwrap();
+        let missing_paths = checker::check(&mut sess, &src, &args.dest);
+        syncer::sync_missing_paths(&mut sess, missing_paths, &src, &args.dest);
+
         for receive in receiver {
-            syncer::handle_event(
-                &mut sess,
-                &mut channel,
-                receive,
-                src.clone(),
-                args.dest.clone(),
-            );
+            syncer::handle_event(&mut sess, receive, src.clone(), args.dest.clone());
             // println!("received: {:?}", receive);
         }
     });
